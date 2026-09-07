@@ -28,7 +28,7 @@ const configuredFrontendUrl = process.env.FRONTEND_URL?.trim();
 const allowedOrigins = [
   'https://alvora.com',
   'https://www.alvora.com',
-  'https://play-bimboo.vercel.app',
+  'https://alvora-lyart.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:5173',
