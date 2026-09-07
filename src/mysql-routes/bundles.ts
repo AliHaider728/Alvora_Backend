@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import * as fs from 'fs';
 import { pool } from '../mysql-lib/db';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { randomUUID } from 'crypto';
@@ -168,7 +169,7 @@ router.get('/:slug', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error fetching bundle:', error);
-    res.status(500).json({ error: 'Failed to fetch bundle' });
+    fs.appendFileSync('debug.log', 'BUNDLE ERROR: ' + (error && error.stack ? error.stack : String(error)) + '\n'); res.status(500).json({ error: 'Failed to fetch bundle' });
   }
 });
 
