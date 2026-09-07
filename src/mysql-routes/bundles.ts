@@ -169,7 +169,7 @@ router.get('/:slug', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error fetching bundle:', error);
-    fs.appendFileSync('debug.log', 'BUNDLE ERROR: ' + (error && error.stack ? error.stack : String(error)) + '\n'); res.status(500).json({ error: 'Failed to fetch bundle' });
+    fs.appendFileSync('debug.log', 'BUNDLE ERROR: ' + (error instanceof Error && error.stack ? error.stack : String(error)) + '\n'); res.status(500).json({ error: 'Failed to fetch bundle' });
   }
 });
 

@@ -23,7 +23,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const [rows] = await pool.execute(`SELECT ${CATEGORY_COLS} FROM categories WHERE status != "inactive" ORDER BY displayOrder ASC, name ASC`);
     res.json(buildTree(rows as any[]));
   } catch (error) {
-    fs.appendFileSync('debug.log', 'CAT ERROR: ' + (error && error.stack ? error.stack : String(error)) + '\n'); res.status(500).json({ error: 'Could not load categories' });
+    fs.appendFileSync('debug.log', 'CAT ERROR: ' + (error instanceof Error && error.stack ? error.stack : String(error)) + '\n'); res.status(500).json({ error: 'Could not load categories' });
   }
 });
 
@@ -32,7 +32,7 @@ router.get('/admin/all', authenticateToken, requireSuperAdmin, async (_req: Requ
     const [rows] = await pool.execute(`SELECT ${CATEGORY_COLS} FROM categories ORDER BY displayOrder ASC, name ASC`);
     res.json(buildTree(rows as any[]));
   } catch (error) {
-    fs.appendFileSync('debug.log', 'CAT ERROR: ' + (error && error.stack ? error.stack : String(error)) + '\n'); res.status(500).json({ error: 'Could not load categories' });
+    fs.appendFileSync('debug.log', 'CAT ERROR: ' + (error instanceof Error && error.stack ? error.stack : String(error)) + '\n'); res.status(500).json({ error: 'Could not load categories' });
   }
 });
 
