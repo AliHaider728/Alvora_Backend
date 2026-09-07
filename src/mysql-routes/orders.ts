@@ -227,46 +227,71 @@ router.post('/', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Invalid item in order' });
       }
 
-      // SELECT FOR UPDATE: locks the row so concurrent transactions can't read stale stock
-      const [productRows] = await conn.execute(
-        'SELECT id, name, price, stockQuantity, trackInventory, inStock, status, isVisible FROM products WHERE id = ? FOR UPDATE',
-        [item.productId]
-      );
-
-      if ((productRows as any[]).length === 0) {
-        await conn.rollback();
-        return res.status(400).json({ error: `Product not found: ${item.productId}` });
-      }
-
-      const product = (productRows as any[])[0];
-
-      if (product.status === 'draft' || product.isVisible === 0) {
-        await conn.rollback();
-        return res.status(400).json({ error: `Product is unavailable: ${product.name}` });
-      }
-
+      const isBundle = item.productType === 'bundle';
       const qty = Number(item.quantity);
-      const stock = Number(product.stockQuantity);
-      const tracks = product.trackInventory === 1 || product.trackInventory === true || product.trackInventory === '1';
+      let unitPrice = 0;
+      let tracks = false;
+      let productName = item.name || '';
 
-      if (tracks) {
-        if (product.inStock === 0 || product.inStock === false || stock < qty) {
+      if (isBundle) {
+        // Validate against Bundles table
+        const [bundleRows] = await conn.execute(
+          'SELECT id, name, currentPrice, isActive FROM bundles WHERE id = ? FOR UPDATE',
+          [item.productId]
+        );
+        if ((bundleRows as any[]).length === 0) {
           await conn.rollback();
-          return res.status(400).json({ error: `${product.name} does not have enough stock (available: ${stock}, requested: ${qty})` });
+          return res.status(400).json({ error: `Bundle not found: ${item.productId}` });
         }
+        const bundle = (bundleRows as any[])[0];
+        if (!bundle.isActive) {
+          await conn.rollback();
+          return res.status(400).json({ error: `Bundle is unavailable: ${bundle.name}` });
+        }
+        productName = bundle.name;
+        unitPrice = Number(item.price || bundle.currentPrice);
+        tracks = true; // Bundles explicitly deduct stock from their children
+      } else {
+        // Validate against Products table
+        const [productRows] = await conn.execute(
+          'SELECT id, name, price, stockQuantity, trackInventory, inStock, status, isVisible FROM products WHERE id = ? FOR UPDATE',
+          [item.productId]
+        );
+        if ((productRows as any[]).length === 0) {
+          await conn.rollback();
+          return res.status(400).json({ error: `Product not found: ${item.productId}` });
+        }
+        const product = (productRows as any[])[0];
+        if (product.status === 'draft' || product.isVisible === 0) {
+          await conn.rollback();
+          return res.status(400).json({ error: `Product is unavailable: ${product.name}` });
+        }
+
+        const stock = Number(product.stockQuantity);
+        tracks = product.trackInventory === 1 || product.trackInventory === true || product.trackInventory === '1';
+
+        if (tracks) {
+          if (product.inStock === 0 || product.inStock === false || stock < qty) {
+            await conn.rollback();
+            return res.status(400).json({ error: `${product.name} does not have enough stock (available: ${stock}, requested: ${qty})` });
+          }
+        }
+        productName = product.name;
+        unitPrice = Number(item.price || product.price);
       }
-      const unitPrice = Number(item.price || product.price);
+
       computedSubtotal += unitPrice * qty;
 
       canonicalItems.push({
-        productId: product.id,
-        productName: product.name,
+        productId: item.productId,
+        productName: productName,
         quantity: qty,
         price: unitPrice,
         image: item.image || null,
         selectedVariant: item.selectedVariant || null,
         variationId: item.variationId || null,
-        trackInventory: tracks
+        trackInventory: tracks,
+        productType: isBundle ? 'bundle' : 'simple'
       });
     }
 
@@ -305,17 +330,42 @@ router.post('/', async (req: Request, res: Response) => {
         [itemId, internalId, item.productId, item.productName, item.quantity, item.price, item.image, item.selectedVariant, item.variationId]
       );
 
-      // Atomic stock deduction with UPDATE WHERE constraint prevents negative stock
+      // Atomic stock deduction
       if (item.trackInventory) {
-        const [stockResult] = await conn.execute(
-          `UPDATE products SET stockQuantity = stockQuantity - ?, updatedAt = ? WHERE id = ? AND stockQuantity >= ?`,
-          [item.quantity, now, item.productId, item.quantity]
-        );
-
-        if ((stockResult as any).affectedRows === 0) {
-          // Stock ran out between our SELECT FOR UPDATE and this UPDATE — rollback!
-          await conn.rollback();
-          return res.status(400).json({ error: `${item.productName} ran out of stock. Please refresh and try again.` });
+        if (item.productType === 'bundle') {
+          // Deduct from underlying bundle components
+          const [bundleProducts] = await conn.execute(
+            'SELECT product_id, quantity FROM bundle_products WHERE bundle_id = ?',
+            [item.productId]
+          );
+          for (const bp of bundleProducts as any[]) {
+            const deductQty = bp.quantity * item.quantity;
+            const [stockResult] = await conn.execute(
+              `UPDATE products SET stockQuantity = stockQuantity - ?, updatedAt = ? WHERE id = ? AND stockQuantity >= ? AND trackInventory = 1`,
+              [deductQty, now, bp.product_id, deductQty]
+            );
+            if ((stockResult as any).affectedRows === 0) {
+              // Confirm if it failed due to OOS or just non-tracking product
+              const [check] = await conn.execute('SELECT trackInventory FROM products WHERE id = ?', [bp.product_id]);
+              if ((check as any[]).length > 0 && (check as any[])[0].trackInventory === 1) {
+                await conn.rollback();
+                return res.status(400).json({ error: `A component of ${item.productName} ran out of stock. Please refresh and try again.` });
+              }
+            }
+          }
+        } else {
+          // Normal product deduction
+          const [stockResult] = await conn.execute(
+            `UPDATE products SET stockQuantity = stockQuantity - ?, updatedAt = ? WHERE id = ? AND stockQuantity >= ? AND trackInventory = 1`,
+            [item.quantity, now, item.productId, item.quantity]
+          );
+          if ((stockResult as any).affectedRows === 0) {
+            const [check] = await conn.execute('SELECT trackInventory FROM products WHERE id = ?', [item.productId]);
+            if ((check as any[]).length > 0 && (check as any[])[0].trackInventory === 1) {
+              await conn.rollback();
+              return res.status(400).json({ error: `${item.productName} ran out of stock. Please refresh and try again.` });
+            }
+          }
         }
       }
     }
