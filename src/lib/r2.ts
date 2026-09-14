@@ -9,6 +9,7 @@ const endpoint = process.env.R2_ENDPOINT;
 export const r2Client = new S3Client({
   region: 'auto',
   endpoint: endpoint || `https://${accountId}.r2.cloudflarestorage.com`,
+  forcePathStyle: true,
   credentials: {
     accessKeyId: accessKeyId || '',
     secretAccessKey: secretAccessKey || '',
