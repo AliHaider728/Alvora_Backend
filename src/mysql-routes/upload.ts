@@ -79,9 +79,9 @@ router.post(
         mimetype: req.file.mimetype,
         size: req.file.size
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('R2 image upload failed:', err);
-      res.status(502).json({ error: 'R2 image upload failed' });
+      res.status(502).json({ error: `R2 image upload failed: ${err.message || String(err)}` });
     }
   }
 );
