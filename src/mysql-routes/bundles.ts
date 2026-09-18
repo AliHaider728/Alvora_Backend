@@ -22,10 +22,15 @@ const parseJson = (val: any, fallback: any = null) => {
 // PUBLIC ROUTES
 // ==========================================
 
-// List all active bundles
+// List bundles
 router.get('/', async (req, res) => {
   try {
-    const [bundles] = await pool.execute('SELECT * FROM bundles WHERE isActive = 1 ORDER BY displayOrder ASC');
+    const showAll = req.query.all === 'true';
+    const query = showAll 
+      ? 'SELECT * FROM bundles ORDER BY displayOrder ASC'
+      : 'SELECT * FROM bundles WHERE isActive = 1 ORDER BY displayOrder ASC';
+      
+    const [bundles] = await pool.execute(query);
     const bundlesArray = bundles as any[];
 
     if (bundlesArray.length === 0) {
@@ -89,6 +94,7 @@ router.get('/', async (req, res) => {
       return {
         ...bundle,
         isActive: bundle.isActive === 1,
+        isBestseller: bundle.isBestseller === 1,
         originalTotalPrice,
         currentPrice,
         products: items
@@ -163,6 +169,7 @@ router.get('/:slug', async (req, res) => {
     res.json({
       ...bundle,
       isActive: bundle.isActive === 1,
+      isBestseller: bundle.isBestseller === 1,
       originalTotalPrice,
       currentPrice,
       products: items
@@ -180,49 +187,55 @@ router.get('/:slug', async (req, res) => {
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    const { name, slug, description, image, discountPercent, isActive, displayOrder, products } = req.body;
+    const { name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, products } = req.body;
     
     // Validate required fields
     if (!name || !slug) {
       return res.status(400).json({ error: 'Name and slug are required' });
     }
 
-    // Check slug uniqueness
+    // Check for duplicate slug
     const [existing] = await conn.execute('SELECT id FROM bundles WHERE slug = ?', [slug]);
     if ((existing as any[]).length > 0) {
+      conn.release();
       return res.status(400).json({ error: 'Slug already exists' });
     }
 
-    // Validate products exist in the database
-    let validProductsToInsert: {product_id: string, quantity: number}[] = [];
-    if (products && Array.isArray(products) && products.length > 0) {
-      const productIds = products.map(p => p.product_id);
-      const placeholders = productIds.map(() => '?').join(',');
-      
-      const [existingProducts] = await conn.execute(
-        `SELECT id FROM products WHERE id IN (${placeholders})`, 
-        productIds
-      );
-      
-      const existingProductIds = (existingProducts as any[]).map(p => p.id);
-      
-      // Verify all provided product_ids actually exist
+    // Check products
+    const validProductsToInsert: { product_id: string; quantity: number }[] = [];
+    if (Array.isArray(products) && products.length > 0) {
       for (const p of products) {
-        if (!existingProductIds.includes(p.product_id)) {
-          conn.release();
-          return res.status(400).json({ error: `Product ID ${p.product_id} does not exist in the database.` });
+        const [prodExists] = await conn.execute('SELECT id FROM products WHERE id = ?', [p.product_id]);
+        if ((prodExists as any[]).length > 0) {
+          validProductsToInsert.push({
+            product_id: p.product_id,
+            quantity: p.quantity || 1
+          });
         }
-        validProductsToInsert.push({ product_id: p.product_id, quantity: p.quantity || 1 });
       }
     }
 
     await conn.beginTransaction();
+    
     const bundleId = randomUUID();
 
     await conn.execute(
-      `INSERT INTO bundles (id, name, slug, description, image, discountPercent, isActive, displayOrder) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [bundleId, name, slug, description || '', image || null, discountPercent || 0, isActive !== false ? 1 : 0, displayOrder || 0]
+      `INSERT INTO bundles (id, name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bundleId, 
+        name, 
+        slug, 
+        description || '', 
+        shortDescription || null,
+        image || null, 
+        customImage || null,
+        discountPercent || 0, 
+        isActive !== false ? 1 : 0, 
+        status || 'published',
+        isBestseller ? 1 : 0,
+        displayOrder || 0
+      ]
     );
 
     if (validProductsToInsert.length > 0) {
@@ -249,7 +262,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const { id } = req.params;
-    const { name, slug, description, image, discountPercent, isActive, displayOrder, products } = req.body;
+    const { name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, products } = req.body;
     
     const [existing] = await conn.execute('SELECT id FROM bundles WHERE id = ?', [id]);
     if ((existing as any[]).length === 0) {
@@ -257,35 +270,23 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'Bundle not found' });
     }
 
-    // Check slug uniqueness
     if (slug) {
       const [dup] = await conn.execute('SELECT id FROM bundles WHERE slug = ? AND id != ?', [slug, id]);
       if ((dup as any[]).length > 0) {
         conn.release();
-        return res.status(400).json({ error: 'Slug already exists on another bundle' });
+        return res.status(400).json({ error: 'Slug already exists' });
       }
     }
 
-    // Validate products exist
-    let validProductsToInsert: {product_id: string, quantity: number}[] = [];
-    if (products && Array.isArray(products)) {
-      if (products.length > 0) {
-        const productIds = products.map(p => p.product_id);
-        const placeholders = productIds.map(() => '?').join(',');
-        
-        const [existingProducts] = await conn.execute(
-          `SELECT id FROM products WHERE id IN (${placeholders})`, 
-          productIds
-        );
-        
-        const existingProductIds = (existingProducts as any[]).map(p => p.id);
-        
-        for (const p of products) {
-          if (!existingProductIds.includes(p.product_id)) {
-            conn.release();
-            return res.status(400).json({ error: `Product ID ${p.product_id} does not exist in the database.` });
-          }
-          validProductsToInsert.push({ product_id: p.product_id, quantity: p.quantity || 1 });
+    const validProductsToInsert: { product_id: string; quantity: number }[] = [];
+    if (products !== undefined && Array.isArray(products)) {
+      for (const p of products) {
+        const [prodExists] = await conn.execute('SELECT id FROM products WHERE id = ?', [p.product_id]);
+        if ((prodExists as any[]).length > 0) {
+          validProductsToInsert.push({
+            product_id: p.product_id,
+            quantity: p.quantity || 1
+          });
         }
       }
     }
@@ -297,9 +298,13 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     if (name !== undefined) { updates.push('name = ?'); values.push(name); }
     if (slug !== undefined) { updates.push('slug = ?'); values.push(slug); }
     if (description !== undefined) { updates.push('description = ?'); values.push(description); }
+    if (shortDescription !== undefined) { updates.push('shortDescription = ?'); values.push(shortDescription); }
     if (image !== undefined) { updates.push('image = ?'); values.push(image); }
+    if (customImage !== undefined) { updates.push('customImage = ?'); values.push(customImage); }
     if (discountPercent !== undefined) { updates.push('discountPercent = ?'); values.push(discountPercent); }
     if (isActive !== undefined) { updates.push('isActive = ?'); values.push(isActive ? 1 : 0); }
+    if (status !== undefined) { updates.push('status = ?'); values.push(status); }
+    if (isBestseller !== undefined) { updates.push('isBestseller = ?'); values.push(isBestseller ? 1 : 0); }
     if (displayOrder !== undefined) { updates.push('displayOrder = ?'); values.push(displayOrder); }
     
     if (updates.length > 0) {
