@@ -88,8 +88,16 @@ router.get('/', async (req, res) => {
       });
 
       const originalTotalPrice = items.reduce((sum, item) => sum + (Number(item.price) * item.bundle_quantity), 0);
-      const discountAmount = originalTotalPrice * (Number(bundle.discountPercent) / 100);
-      const currentPrice = originalTotalPrice - discountAmount;
+      let currentPrice = originalTotalPrice;
+      if (bundle.discountType === 'percentage') {
+        currentPrice = originalTotalPrice * (1 - (Number(bundle.discountValue || bundle.discountPercent || 0) / 100));
+      } else if (bundle.discountType === 'fixed') {
+        currentPrice = Math.max(0, originalTotalPrice - Number(bundle.discountValue || 0));
+      } else if (bundle.discountType === 'custom') {
+        currentPrice = Number(bundle.customPrice || bundle.bundlePrice || originalTotalPrice);
+      } else {
+        currentPrice = originalTotalPrice - (originalTotalPrice * (Number(bundle.discountPercent || 0) / 100));
+      }
 
       return {
         ...bundle,
@@ -163,8 +171,17 @@ router.get('/:slug', async (req, res) => {
     }));
 
     const originalTotalPrice = items.reduce((sum, item) => sum + (Number(item.price) * item.bundle_quantity), 0);
-    const discountAmount = originalTotalPrice * (Number(bundle.discountPercent) / 100);
-    const currentPrice = originalTotalPrice - discountAmount;
+    
+    let currentPrice = originalTotalPrice;
+    if (bundle.discountType === 'percentage') {
+      currentPrice = originalTotalPrice * (1 - (Number(bundle.discountValue || bundle.discountPercent || 0) / 100));
+    } else if (bundle.discountType === 'fixed') {
+      currentPrice = Math.max(0, originalTotalPrice - Number(bundle.discountValue || 0));
+    } else if (bundle.discountType === 'custom') {
+      currentPrice = Number(bundle.customPrice || bundle.bundlePrice || originalTotalPrice);
+    } else {
+      currentPrice = originalTotalPrice - (originalTotalPrice * (Number(bundle.discountPercent || 0) / 100));
+    }
 
     res.json({
       ...bundle,
@@ -187,7 +204,7 @@ router.get('/:slug', async (req, res) => {
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    const { name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, products } = req.body;
+    const { name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, products, bundlePrice, discountType, discountValue, customPrice } = req.body;
     
     // Validate required fields
     if (!name || !slug) {
@@ -220,8 +237,8 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     const bundleId = randomUUID();
 
     await conn.execute(
-      `INSERT INTO bundles (id, name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bundles (id, name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, bundlePrice, discountType, discountValue, customPrice) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         bundleId, 
         name, 
@@ -234,7 +251,11 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         isActive !== false ? 1 : 0, 
         status || 'published',
         isBestseller ? 1 : 0,
-        displayOrder || 0
+        displayOrder || 0,
+        bundlePrice || null,
+        discountType || 'percentage',
+        discountValue || 0,
+        customPrice || 0
       ]
     );
 
@@ -262,7 +283,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const { id } = req.params;
-    const { name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, products } = req.body;
+    const { name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, products, bundlePrice, discountType, discountValue, customPrice } = req.body;
     
     const [existing] = await conn.execute('SELECT id FROM bundles WHERE id = ?', [id]);
     if ((existing as any[]).length === 0) {
@@ -306,6 +327,10 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     if (status !== undefined) { updates.push('status = ?'); values.push(status); }
     if (isBestseller !== undefined) { updates.push('isBestseller = ?'); values.push(isBestseller ? 1 : 0); }
     if (displayOrder !== undefined) { updates.push('displayOrder = ?'); values.push(displayOrder); }
+    if (bundlePrice !== undefined) { updates.push('bundlePrice = ?'); values.push(bundlePrice); }
+    if (discountType !== undefined) { updates.push('discountType = ?'); values.push(discountType); }
+    if (discountValue !== undefined) { updates.push('discountValue = ?'); values.push(discountValue); }
+    if (customPrice !== undefined) { updates.push('customPrice = ?'); values.push(customPrice); }
     
     if (updates.length > 0) {
       values.push(id);
