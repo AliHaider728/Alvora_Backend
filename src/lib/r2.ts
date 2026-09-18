@@ -1,11 +1,18 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
+import https from 'https';
 
 const accountId = process.env.R2_ACCOUNT_ID;
 const accessKeyId = process.env.R2_ACCESS_KEY_ID;
 const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 const endpoint = process.env.R2_ENDPOINT;
 
-// 1. Set up an R2 client using the S3-compatible SDK
+const customHandler = new NodeHttpHandler({
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false, // Bypass strict SSL handshake failure for Cloudflare R2
+  }),
+});
+
 export const r2Client = new S3Client({
   region: 'auto',
   endpoint: endpoint || `https://${accountId}.r2.cloudflarestorage.com`,
@@ -14,12 +21,9 @@ export const r2Client = new S3Client({
     accessKeyId: accessKeyId || '',
     secretAccessKey: secretAccessKey || '',
   },
+  requestHandler: customHandler,
 });
 
-/**
- * 2. Reusable upload utility function
- * Uploads a file buffer to the configured R2 bucket and returns the public URL.
- */
 export const uploadToR2 = async (
   fileBuffer: Buffer,
   fileName: string,
@@ -36,21 +40,14 @@ export const uploadToR2 = async (
   });
 
   await r2Client.send(command);
-
-  // Returns the final public URL
   return `${publicUrlBase}/${fileName}`;
 };
 
-/**
- * Delete a file from the configured R2 bucket.
- */
 export const deleteFromR2 = async (fileName: string): Promise<void> => {
   const bucketName = process.env.R2_BUCKET_NAME || 'alvora-assets';
-
   const command = new DeleteObjectCommand({
     Bucket: bucketName,
     Key: fileName,
   });
-
   await r2Client.send(command);
 };
