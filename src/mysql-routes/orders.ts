@@ -219,6 +219,8 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Validate products and compute totals
     const canonicalItems: any[] = [];
+
+      
     let computedSubtotal = 0;
 
     for (const item of items) {
@@ -299,7 +301,42 @@ router.post('/', async (req: Request, res: Response) => {
     const [settingsRows] = await conn.execute('SELECT standardShippingFee, freeShippingThreshold FROM settings LIMIT 1');
     const settings = (settingsRows as any[])[0] || { standardShippingFee: 200, freeShippingThreshold: 3000 };
     const discount = Math.max(0, Number(discountAmount));
-    const afterDiscount = Math.max(0, computedSubtotal - discount);
+    
+      // SERVER-SIDE ROUTINE VALIDATION
+      let routineSubtotal = 0;
+      const routineProductIds = new Set();
+      for (const item of items) {
+        if (item.isRoutine) {
+          routineProductIds.add(item.productId);
+          // find the canonical price since frontend price might be spoofed
+          const canonical = canonicalItems.find(c => c.productId === item.productId);
+          if (canonical) {
+             routineSubtotal += (Number(canonical.price) * Number(canonical.quantity));
+          }
+        }
+      }
+      
+      let maxValidRoutineDiscount = 0;
+      if (routineProductIds.size >= 2) {
+        maxValidRoutineDiscount = Math.round(routineSubtotal * 0.15);
+      }
+      
+      let maxValidCouponDiscount = 0;
+      if (appliedCoupon) {
+        let val = appliedCoupon.discountValue || appliedCoupon.amount || 0;
+        if (appliedCoupon.discountType === 'percentage') {
+           maxValidCouponDiscount = Math.round(computedSubtotal * val / 100);
+        } else {
+           maxValidCouponDiscount = val;
+        }
+      }
+      
+      if (discount > (maxValidRoutineDiscount + maxValidCouponDiscount + 10)) {
+         await conn.rollback();
+         return res.status(400).json({ error: 'Invalid discount amount. Ensure you have at least 2 distinct items for the routine discount.' });
+      }
+
+      const afterDiscount = Math.max(0, computedSubtotal - discount);
     const shippingFee = clientShippingFee !== undefined ? Number(clientShippingFee) : (afterDiscount >= Number(settings.freeShippingThreshold) ? 0 : Number(settings.standardShippingFee));
     const total = afterDiscount + shippingFee;
 
