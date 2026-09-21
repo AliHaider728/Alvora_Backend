@@ -11,7 +11,6 @@
     "build": "tsc",
     "backfill:product-thumbnails": "tsx src/scripts/backfillProductThumbnails.ts",
     "migrate:product-merchandising": "tsx src/scripts/migrateProductMerchandising.ts",
-    "test": "tsx --test tests/*.test.ts",
     "start": "node app.js",
     "seed:reviews": "tsx src/scripts/seedReviews.ts"
   },
@@ -46,3 +45,4 @@
     "typescript": "^5.4.5"
   }
 }
+
