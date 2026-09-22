@@ -101,8 +101,8 @@ router.get('/', async (req, res) => {
 
       return {
         ...bundle,
-        isActive: bundle.isActive === 1,
-        isBestseller: bundle.isBestseller === 1,
+        isActive: bundle.isActive === 1 || bundle.isActive === true,
+        isBestseller: bundle.isBestseller === 1 || bundle.isBestseller === true,
         originalTotalPrice,
         currentPrice,
         products: items
@@ -185,8 +185,8 @@ router.get('/:slug', async (req, res) => {
 
     res.json({
       ...bundle,
-      isActive: bundle.isActive === 1,
-      isBestseller: bundle.isBestseller === 1,
+      isActive: bundle.isActive === 1 || bundle.isActive === true,
+      isBestseller: bundle.isBestseller === 1 || bundle.isBestseller === true,
       originalTotalPrice,
       currentPrice,
       products: items

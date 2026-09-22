@@ -384,7 +384,7 @@ router.post('/', async (req: Request, res: Response) => {
             if ((stockResult as any).affectedRows === 0) {
               // Confirm if it failed due to OOS or just non-tracking product
               const [check] = await conn.execute('SELECT trackInventory FROM products WHERE id = ?', [bp.product_id]);
-              if ((check as any[]).length > 0 && (check as any[])[0].trackInventory === 1) {
+              if ((check as any[]).length > 0 && ((check as any[])[0].trackInventory === 1 || (check as any[])[0].trackInventory === true)) {
                 await conn.rollback();
                 return res.status(400).json({ error: `A component of ${item.productName} ran out of stock. Please refresh and try again.` });
               }
@@ -398,7 +398,7 @@ router.post('/', async (req: Request, res: Response) => {
           );
           if ((stockResult as any).affectedRows === 0) {
             const [check] = await conn.execute('SELECT trackInventory FROM products WHERE id = ?', [item.productId]);
-            if ((check as any[]).length > 0 && (check as any[])[0].trackInventory === 1) {
+            if ((check as any[]).length > 0 && ((check as any[])[0].trackInventory === 1 || (check as any[])[0].trackInventory === true)) {
               await conn.rollback();
               return res.status(400).json({ error: `${item.productName} ran out of stock. Please refresh and try again.` });
             }

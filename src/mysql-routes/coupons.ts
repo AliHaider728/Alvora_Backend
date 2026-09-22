@@ -127,7 +127,7 @@ router.put(`/:id`, authenticateToken, requireAdmin, async (req: Request, res: Re
     const currentCoupon = (existingRows as any[])[0];
     
     // Convert boolean stored as 1/0 back to boolean for normalization
-    currentCoupon.isActive = currentCoupon.isActive === 1;
+    currentCoupon.isActive = currentCoupon.isActive === 1 || currentCoupon.isActive === true;
 
     const data = normalizeCouponPayload(req.body, currentCoupon);
     const now = new Date();
