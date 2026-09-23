@@ -42,7 +42,7 @@ const getSettings = async () => {
       `INSERT INTO settings (id, storeName, email, phone, address, currency, freeShippingThreshold, standardShippingFee, taxRate, defaultMetaTitle, defaultMetaDescription, storefrontNavigation, homepageSections, socialLinks, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        id, 'Alvora', 'support@alvora.com', '', '', 'Rs.', 5000, 250, 0, '', '',
+        id, 'Alvora', 'sales@alvora.pk', '', '', 'Rs.', 5000, 250, 0, '', '',
         JSON.stringify(DEFAULT_STOREFRONT_NAVIGATION),
         JSON.stringify(DEFAULT_HOMEPAGE_SECTIONS),
         JSON.stringify({}),

@@ -41,7 +41,7 @@ async function getFullOrder(conn: any, orderId: string) {
 
 // Generate a readable order ID (same pattern as original Mongo version)
 function generateOrderId() {
-  return 'PB-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+  return 'ALV-' + Date.now().toString(36).toUpperCase() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
 

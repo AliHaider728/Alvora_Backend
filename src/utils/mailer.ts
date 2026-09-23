@@ -89,7 +89,7 @@ const sendEmail = async (to: string, content: EmailContent): Promise<EmailDispat
       subject: content.subject,
       html: content.html,
       text: content.text,
-      replyTo: 'sales@alvora.com'
+      replyTo: 'sales@alvora.pk'
     });
     const acceptedCount = Array.isArray(info.accepted) ? info.accepted.length : 0;
     const rejectedCount = Array.isArray(info.rejected) ? info.rejected.length : 0;
@@ -147,7 +147,7 @@ export const buildOrderDeliveredEmail = (order: any): EmailContent => {
         <tr><td align="center">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
             <tr><td style="background:#ffffff;padding:36px 28px 24px;text-align:center;border-bottom:1px solid #f1f5f9;">
-              <img src="https://res.cloudinary.com/dn2bcvcvg/image/upload/v1786520001/alvoraLOGO_t6zqit.webp" alt="Alvora" style="width:180px;height:auto;margin:0 auto 12px;display:block;" />
+              <img src="https://alvora.pk/images/logo.png" alt="Alvora" style="width:180px;height:auto;margin:0 auto 12px;display:block;" />
               <p style="color:#64748b;margin:0;font-size:15px;font-weight:500;letter-spacing:0.5px;">Delivered with smiles</p>
             </td></tr>
             <tr><td style="padding:32px 28px;">
@@ -156,7 +156,7 @@ export const buildOrderDeliveredEmail = (order: any): EmailContent => {
               <p style="margin:0 0 22px;line-height:1.6;">Great news—your Alvora order <strong>#${orderId}</strong> was delivered on <strong>${escapeHtml(deliveryDate)}</strong>.</p>
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px;margin-bottom:22px;">
                 <strong style="color:#166534;">Delivery confirmed</strong>
-                <div style="color:#15803d;font-size:13px;margin-top:4px;">We hope this order brings plenty of happy playtime.</div>
+                <div style="color:#15803d;font-size:13px;margin-top:4px;">We hope you enjoy your new skincare routine.</div>
               </div>
               <h3 style="color:#0f172a;font-size:16px;margin:0 0 8px;">Order summary</h3>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
@@ -166,10 +166,10 @@ export const buildOrderDeliveredEmail = (order: any): EmailContent => {
                 ${itemRows}
               </table>
               <p style="font-size:18px;text-align:right;color:#e11d48;font-weight:800;margin:18px 0 26px;">Total: ${total}</p>
-              <p style="line-height:1.6;margin:0 0 12px;">If anything is missing or damaged, reply to this email or contact <a href="mailto:sales@alvora.com" style="color:#e11d48;">sales@alvora.com</a>.</p>
+              <p style="line-height:1.6;margin:0 0 12px;">If anything is missing or damaged, reply to this email or contact <a href="mailto:sales@alvora.pk" style="color:#e11d48;">sales@alvora.pk</a>.</p>
               <p style="line-height:1.6;margin:0;">Thank you for choosing Alvora!</p>
             </td></tr>
-            <tr><td style="background:#f8fafc;padding:18px 28px;text-align:center;color:#94a3b8;font-size:12px;">Alvora · Customer Support: sales@alvora.com</td></tr>
+            <tr><td style="background:#f8fafc;padding:18px 28px;text-align:center;color:#94a3b8;font-size:12px;">Alvora · Customer Support: sales@alvora.pk</td></tr>
           </table>
         </td></tr>
       </table>
@@ -182,7 +182,7 @@ export const buildOrderDeliveredEmail = (order: any): EmailContent => {
     `Order #${String(order.orderId || 'Order')} was delivered on ${deliveryDate}.`,
     `Products: ${productNames || 'Alvora product'}`,
     `Total: ${total}`,
-    'Need help? Reply to this email or contact sales@alvora.com.'
+    'Need help? Reply to this email or contact sales@alvora.pk.'
   ].join('\n\n');
 
   return { subject, html, text };
@@ -232,8 +232,8 @@ export const buildOrderConfirmationEmail = (order: any, options?: { isNewAccount
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;padding:24px 12px;"><tr><td align="center">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
         <tr><td style="background:#ffffff;padding:36px 28px 24px;text-align:center;border-bottom:1px solid #f1f5f9;">
-          <img src="https://res.cloudinary.com/dn2bcvcvg/image/upload/v1786520001/alvoraLOGO_t6zqit.webp" alt="Alvora" style="width:180px;height:auto;margin:0 auto 12px;display:block;" />
-          <p style="color:#64748b;margin:0;font-size:15px;font-weight:500;letter-spacing:0.5px;">Happy playtime starts here</p>
+          <img src="https://alvora.pk/images/logo.png" alt="Alvora" style="width:180px;height:auto;margin:0 auto 12px;display:block;" />
+          <p style="color:#64748b;margin:0;font-size:15px;font-weight:500;letter-spacing:0.5px;">Healthy Skin. Naturally You.</p>
         </td></tr>
         <tr><td style="padding:32px 28px;">
           <h2 style="color:#0f172a;font-size:24px;margin:0 0 16px;">Your order is confirmed!</h2>
@@ -255,9 +255,9 @@ export const buildOrderConfirmationEmail = (order: any, options?: { isNewAccount
           </table>
           <div style="background:#f8fafc;border-radius:14px;padding:16px;margin-bottom:22px;"><h3 style="color:#0f172a;font-size:16px;margin:0 0 8px;">Delivery address</h3><p style="margin:0;line-height:1.6;color:#334155;"><strong>${escapeHtml(address.fullName || customerName)}</strong><br/>${escapeHtml(fullAddress)}${contactPhone ? `<br/>Phone: ${escapeHtml(contactPhone)}` : ''}</p></div>
           ${options?.isNewAccount ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:14px;padding:16px;margin-bottom:22px;"><h3 style="color:#b45309;font-size:16px;margin:0 0 8px;">Your Alvora account has been created</h3><p style="margin:0 0 12px;line-height:1.6;color:#92400e;">A Alvora account has been created for you automatically. You are already signed in on this device, so you can start managing your orders immediately. A temporary password has also been generated for future sign-ins. For security, you can change it anytime from the Password section in your Profile.</p><p style="margin:0 0 4px;color:#92400e;"><strong>Email:</strong> ${escapeHtml(String(order.email || ''))}</p><p style="margin:0 0 16px;color:#92400e;"><strong>Temporary Password:</strong> ${escapeHtml(options.rawPassword || '')}</p><a href="${process.env.FRONTEND_URL || 'https://play-bimboo.vercel.app'}/profile" style="display:inline-block;background:#d97706;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;">View Your Profile</a></div>` : (options?.isNewAccount === false ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px;margin-bottom:22px;"><h3 style="color:#15803d;font-size:16px;margin:0 0 8px;">Track your order</h3><p style="margin:0 0 12px;line-height:1.6;color:#166534;">You already have an account with us. Log in with your existing credentials to track this order.</p><a href="${process.env.FRONTEND_URL || 'https://play-bimboo.vercel.app'}/login" style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:bold;">Log In to Track Order</a></div>` : '')}
-          <p style="line-height:1.6;margin:0 0 12px;">Questions about your order? Reply to this email or contact <a href="mailto:sales@alvora.com" style="color:#e11d48;">sales@alvora.com</a>.</p><p style="line-height:1.6;margin:0;">Thank you for choosing Alvora!</p>
+          <p style="line-height:1.6;margin:0 0 12px;">Questions about your order? Reply to this email or contact <a href="mailto:sales@alvora.pk" style="color:#e11d48;">sales@alvora.pk</a>.</p><p style="line-height:1.6;margin:0;">Thank you for choosing Alvora!</p>
         </td></tr>
-        <tr><td style="background:#f8fafc;padding:18px 28px;text-align:center;color:#94a3b8;font-size:12px;">Alvora &middot; Customer Support: sales@alvora.com</td></tr>
+        <tr><td style="background:#f8fafc;padding:18px 28px;text-align:center;color:#94a3b8;font-size:12px;">Alvora &middot; Customer Support: sales@alvora.pk</td></tr>
       </table>
     </td></tr></table>
   </body></html>`;
@@ -281,7 +281,7 @@ export const buildOrderConfirmationEmail = (order: any, options?: { isNewAccount
       '------------------------'
     ] : [])),
     'Our team will contact you to confirm the order before it is dispatched.',
-    'Need help? Reply to this email or contact sales@alvora.com.'
+    'Need help? Reply to this email or contact sales@alvora.pk.'
   ].join('\n\n');
   return { subject, html, text };
 };
@@ -292,8 +292,8 @@ export const sendOrderConfirmationEmail = (order: any, options?: { isNewAccount?
 export const sendOrderStatusEmail = async (order: any) => {
   const content: EmailContent = {
     subject: `Order Update #${String(order.orderId || 'Order')} - ${String(order.status || 'Updated')}`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:32px 24px;border:1px solid #e2e8f0;border-radius:16px;"><img src="https://res.cloudinary.com/dn2bcvcvg/image/upload/v1786520001/alvoraLOGO_t6zqit.webp" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" /><h2 style="color:#0f172a;text-align:center;margin:0 0 24px;">Order Update</h2><p>Hi <strong>${escapeHtml(order.customerName || 'Customer')}</strong>,</p><p>Order <strong>#${escapeHtml(order.orderId || 'Order')}</strong> is now <strong>${escapeHtml(order.status || 'Updated')}</strong>.</p>${order.trackingNumber ? `<p>Tracking code: <strong>${escapeHtml(order.trackingNumber)}</strong></p>` : ''}<br/><p>Support: <a href="mailto:sales@alvora.com" style="color:#e11d48;">sales@alvora.com</a></p></div>`,
-    text: `Alvora order #${String(order.orderId || 'Order')} is now ${String(order.status || 'Updated')}. Support: sales@alvora.com.`
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:32px 24px;border:1px solid #e2e8f0;border-radius:16px;"><img src="https://alvora.pk/images/logo.png" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" /><h2 style="color:#0f172a;text-align:center;margin:0 0 24px;">Order Update</h2><p>Hi <strong>${escapeHtml(order.customerName || 'Customer')}</strong>,</p><p>Order <strong>#${escapeHtml(order.orderId || 'Order')}</strong> is now <strong>${escapeHtml(order.status || 'Updated')}</strong>.</p>${order.trackingNumber ? `<p>Tracking code: <strong>${escapeHtml(order.trackingNumber)}</strong></p>` : ''}<br/><p>Support: <a href="mailto:sales@alvora.pk" style="color:#e11d48;">sales@alvora.pk</a></p></div>`,
+    text: `Alvora order #${String(order.orderId || 'Order')} is now ${String(order.status || 'Updated')}. Support: sales@alvora.pk.`
   };
   return sendEmail(String(order.email || ''), content);
 };
@@ -360,7 +360,7 @@ export const buildAdminNewOrderEmail = (order: any): EmailContent => {
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;padding:24px 12px;"><tr><td align="center">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
         <tr><td style="background:#ffffff;padding:36px 28px 24px;text-align:center;border-bottom:1px solid #f1f5f9;">
-          <img src="https://res.cloudinary.com/dn2bcvcvg/image/upload/v1786520001/alvoraLOGO_t6zqit.webp" alt="Alvora" style="width:180px;height:auto;margin:0 auto 16px;display:block;" />
+          <img src="https://alvora.pk/images/logo.png" alt="Alvora" style="width:180px;height:auto;margin:0 auto 16px;display:block;" />
           <h1 style="color:#0f172a;font-size:22px;margin:0;">You've received a new order</h1>
         </td></tr>
         <tr><td style="padding:32px 28px;">
@@ -440,7 +440,7 @@ export const sendPasswordResetEmail = async (user: any, code: string) => {
   const subject = 'Reset your Alvora password';
   const html = `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#333;border:1px solid #e2e8f0;border-radius:16px;padding:32px 24px;">
-      <img src="https://res.cloudinary.com/dn2bcvcvg/image/upload/v1786520001/alvoraLOGO_t6zqit.webp" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" />
+      <img src="https://alvora.pk/images/logo.png" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" />
       <h2 style="color:#0f172a;text-align:center;margin-top:0;">Password Reset</h2>
       <p>Hello ${escapeHtml(user.name)},</p>
       <p>You recently requested to reset your password for your Alvora account. Use the 6-digit verification code below to reset it.</p>
@@ -462,7 +462,7 @@ export const sendAccountActivationEmail = async (user: any, token: string) => {
   const subject = 'Activate Your Alvora Account';
   const html = `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#333;border:1px solid #e2e8f0;border-radius:16px;padding:32px 24px;">
-      <img src="https://res.cloudinary.com/dn2bcvcvg/image/upload/v1786520001/alvoraLOGO_t6zqit.webp" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" />
+      <img src="https://alvora.pk/images/logo.png" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" />
       <h2 style="color:#0f172a;text-align:center;margin-top:0;">Welcome!</h2>
       <p>Hello ${escapeHtml(user.name)},</p>
       <p>Thank you for your recent order! We've created an account for you to easily track your orders and manage your wishlist.</p>
@@ -481,7 +481,7 @@ export const sendAccountActivationEmail = async (user: any, token: string) => {
 
 export const sendContactConfirmationEmail = async (email: string, name: string) => {
   const subject = 'Thank you for contacting Alvora';
-  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e2e8f0;border-radius:16px;padding:32px 24px;"><img src="https://res.cloudinary.com/dn2bcvcvg/image/upload/v1786520001/alvoraLOGO_t6zqit.webp" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" /><h1 style="color:#0f172a;text-align:center;font-size:24px;margin-top:0;">Hello ${name},</h1><p>Thank you for your enquiry. We have received your message and will contact you as soon as possible.</p><br/><p>Best regards,<br/>The Alvora Team</p></div>`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;border:1px solid #e2e8f0;border-radius:16px;padding:32px 24px;"><img src="https://alvora.pk/images/logo.png" alt="Alvora" style="width:180px;height:auto;margin:0 auto 24px;display:block;" /><h1 style="color:#0f172a;text-align:center;font-size:24px;margin-top:0;">Hello ${name},</h1><p>Thank you for your enquiry. We have received your message and will contact you as soon as possible.</p><br/><p>Best regards,<br/>The Alvora Team</p></div>`;
   const text = `Hello ${name},\n\nThank you for your enquiry. We have received your message and will contact you as soon as possible.\n\nBest regards,\nThe Alvora Team`;
   return sendEmail(email, { subject, html, text });
 };
