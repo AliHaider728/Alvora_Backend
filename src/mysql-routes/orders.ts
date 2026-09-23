@@ -195,7 +195,8 @@ router.post('/', async (req: Request, res: Response) => {
   await conn.beginTransaction();
 
   try {
-    const { customerName, email, phone, items, discountAmount = 0, shippingAddress, appliedCoupon, checkoutRequestId, shippingFee: clientShippingFee } = req.body;
+    const { customerName, email, phone, items, discountAmount = 0, shippingAddress, appliedCoupon, checkoutRequestId, shippingFee: clientShippingFee, deliveryCharge: clientDeliveryCharge, shipping: clientShipping } = req.body;
+    const resolvedClientShipping = clientShippingFee ?? clientDeliveryCharge ?? clientShipping;
 
     if (!Array.isArray(items) || items.length === 0) {
       await conn.rollback();
@@ -337,7 +338,7 @@ router.post('/', async (req: Request, res: Response) => {
       }
 
       const afterDiscount = Math.max(0, computedSubtotal - discount);
-    const shippingFee = clientShippingFee !== undefined ? Number(clientShippingFee) : (afterDiscount >= Number(settings.freeShippingThreshold) ? 0 : Number(settings.standardShippingFee));
+    const shippingFee = resolvedClientShipping !== undefined ? Number(resolvedClientShipping) : (afterDiscount >= Number(settings.freeShippingThreshold) ? 0 : Number(settings.standardShippingFee));
     const total = afterDiscount + shippingFee;
 
     // Create the order

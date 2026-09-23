@@ -79,6 +79,8 @@ async function enrichProducts(conn: any, products: any[]) {
       lowStockThreshold: p.lowStockThreshold != null ? Number(p.lowStockThreshold) : null,
       rating: Number(p.rating || 0),
       reviewsCount: Number(p.reviewsCount || 0),
+      weight: p.weight != null ? Number(p.weight) : null,
+      customDeliveryFee: p.customDeliveryFee != null ? Number(p.customDeliveryFee) : null,
       images: imgs.filter((i: any) => !i.isThumbnail).length > 0 ? imgs.filter((i: any) => !i.isThumbnail).map((i: any) => i.url) : imgs.map((i: any) => i.url),
       imageThumbnailUrls: imgs.filter((i: any) => i.isThumbnail).length > 0 ? imgs.filter((i: any) => i.isThumbnail).map((i: any) => i.url) : imgs.map((i: any) => i.url),
       imagePublicIds: imgs.map((i: any) => i.publicId).filter(Boolean),
