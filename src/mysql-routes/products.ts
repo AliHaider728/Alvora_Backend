@@ -56,11 +56,14 @@ async function enrichProducts(conn: any, products: any[]) {
   const [images] = await conn.execute(`SELECT ${PRODUCT_IMAGE_COLS} FROM product_images WHERE product_id IN (${placeholders}) ORDER BY product_id, position ASC`, productIds);
   const [pcats] = await conn.execute(`SELECT pc.product_id, c.id, c.name, c.slug FROM product_categories pc JOIN categories c ON pc.category_id = c.id WHERE pc.product_id IN (${placeholders})`, productIds);
   const [variants] = await conn.execute(`SELECT ${PRODUCT_VARIANT_COLS} FROM product_variants WHERE product_id IN (${placeholders})`, productIds);
+  const [reviewsStats] = await conn.execute(`SELECT productId, COUNT(*) as count, ROUND(AVG(rating),1) as avgRating FROM reviews WHERE productId IN (${placeholders}) AND status = 'approved' GROUP BY productId`, productIds);
 
   const imagesByProduct = new Map();
   const categoriesByProduct = new Map();
   const variantsByProduct = new Map();
+  const reviewsByProduct = new Map();
 
+  (reviewsStats as any[]).forEach(row => { reviewsByProduct.set(row.productId, { count: row.count, rating: row.avgRating }); });
   (images as any[]).forEach(row => { if (!imagesByProduct.has(row.product_id)) imagesByProduct.set(row.product_id, []); imagesByProduct.get(row.product_id).push(row); });
   (pcats as any[]).forEach(row => { if (!categoriesByProduct.has(row.product_id)) categoriesByProduct.set(row.product_id, []); categoriesByProduct.get(row.product_id).push(row); });
   (variants as any[]).forEach(row => { if (!variantsByProduct.has(row.product_id)) variantsByProduct.set(row.product_id, []); variantsByProduct.get(row.product_id).push(row); });
@@ -77,8 +80,8 @@ async function enrichProducts(conn: any, products: any[]) {
       discountPercent: Number(p.discountPercent || 0),
       stockQuantity: p.stockQuantity != null ? Number(p.stockQuantity) : null,
       lowStockThreshold: p.lowStockThreshold != null ? Number(p.lowStockThreshold) : null,
-      rating: Number(p.rating || 0),
-      reviewsCount: Number(p.reviewsCount || 0),
+      rating: reviewsByProduct.has(p.id) ? Number(reviewsByProduct.get(p.id).rating) : 0,
+      reviewCount: reviewsByProduct.has(p.id) ? Number(reviewsByProduct.get(p.id).count) : 0,
       weight: p.weight != null ? Number(p.weight) : null,
       customDeliveryFee: p.customDeliveryFee != null ? Number(p.customDeliveryFee) : null,
       images: imgs.filter((i: any) => !i.isThumbnail).length > 0 ? imgs.filter((i: any) => !i.isThumbnail).map((i: any) => i.url) : imgs.map((i: any) => i.url),
