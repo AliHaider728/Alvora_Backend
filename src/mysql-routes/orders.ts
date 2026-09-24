@@ -239,7 +239,7 @@ router.post('/', async (req: Request, res: Response) => {
       if (isBundle) {
         // Validate against Bundles table
         const [bundleRows] = await conn.execute(
-          'SELECT id, name, currentPrice, isActive FROM bundles WHERE id = ? FOR UPDATE',
+          'SELECT id, name, bundlePrice, customPrice, discountValue, discountPercent, isActive FROM bundles WHERE id = ? FOR UPDATE',
           [item.productId]
         );
         if ((bundleRows as any[]).length === 0) {
@@ -252,7 +252,7 @@ router.post('/', async (req: Request, res: Response) => {
           return res.status(400).json({ error: `Bundle is unavailable: ${bundle.name}` });
         }
         productName = bundle.name;
-        unitPrice = Number(item.price || bundle.currentPrice);
+        unitPrice = Number(item.price || bundle.customPrice || bundle.bundlePrice || 0);
         tracks = true; // Bundles explicitly deduct stock from their children
       } else {
         // Validate against Products table
