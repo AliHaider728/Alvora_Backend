@@ -12,6 +12,9 @@ import {
   getAdminNotificationRecipients
 } from '../utils/mailer.js';
 import crypto from 'crypto';
+import { calculateRoutineDiscount, roundMoney } from '../lib/routineDiscount.js';
+import { getRoutineSettings } from '../mysql-lib/routineSettings.js';
+import { resolveCartLine } from '../lib/pricingOffers.js';
 
 const router = Router();
 
@@ -225,12 +228,15 @@ router.post('/', async (req: Request, res: Response) => {
     let computedSubtotal = 0;
 
     for (const item of items) {
-      if (!item.productId || !item.quantity || item.quantity < 1) {
+      if (!item.productId || !Number.isInteger(item.quantity) || item.quantity < 1) {
         await conn.rollback();
         return res.status(400).json({ error: 'Invalid item in order' });
       }
 
       const isBundle = item.productType === 'bundle';
+      if (isBundle && item.isRoutine === true) {
+        throw new Error('Choose individual products for a custom routine.');
+      }
       const qty = Number(item.quantity);
       let unitPrice = 0;
       let tracks = false;
@@ -257,7 +263,7 @@ router.post('/', async (req: Request, res: Response) => {
       } else {
         // Validate against Products table
         const [productRows] = await conn.execute(
-          'SELECT id, name, price, stockQuantity, trackInventory, inStock, status, isVisible FROM products WHERE id = ? FOR UPDATE',
+          'SELECT id, name, price, stockQuantity, trackInventory, inStock, status, isVisible, productType, pricingOffers FROM products WHERE id = ? FOR UPDATE',
           [item.productId]
         );
         if ((productRows as any[]).length === 0) {
@@ -265,7 +271,7 @@ router.post('/', async (req: Request, res: Response) => {
           return res.status(400).json({ error: `Product not found: ${item.productId}` });
         }
         const product = (productRows as any[])[0];
-        if (product.status === 'draft' || product.isVisible === 0) {
+        if (product.status === 'draft' || product.isVisible === 0 || product.isVisible === false) {
           await conn.rollback();
           return res.status(400).json({ error: `Product is unavailable: ${product.name}` });
         }
@@ -281,12 +287,28 @@ router.post('/', async (req: Request, res: Response) => {
         }
         productName = product.name;
         unitPrice = Number(item.price || product.price);
+        if (item.isRoutine === true) {
+          let basePrice = Number(product.price);
+          if (product.productType === 'variable') {
+            const [variationRows] = await conn.execute('SELECT id, regularPrice, salePrice, enabled, manageStock, stockQuantity, stockStatus FROM product_variants WHERE id = ? AND product_id = ? FOR UPDATE', [item.variationId || '', product.id]);
+            const variation = (variationRows as any[])[0];
+            if (!variation || !variation.enabled || variation.stockStatus === 'out_of_stock' || (variation.manageStock && Number(variation.stockQuantity) < qty)) {
+              throw new Error(`Choose an available option for ${product.name}.`);
+            }
+            basePrice = Number(variation.salePrice ?? variation.regularPrice);
+          } else if (!product.inStock) {
+            throw new Error(`${product.name} is out of stock.`);
+          }
+          const offers = typeof product.pricingOffers === 'string' ? JSON.parse(product.pricingOffers) : product.pricingOffers;
+          unitPrice = resolveCartLine(offers, basePrice, qty).unitPrice;
+        }
       }
 
       computedSubtotal += unitPrice * qty;
 
       canonicalItems.push({
         productId: item.productId,
+        isRoutine: item.isRoutine === true,
         productName: productName,
         quantity: qty,
         price: unitPrice,
@@ -301,43 +323,24 @@ router.post('/', async (req: Request, res: Response) => {
     // Fetch shipping settings
     const [settingsRows] = await conn.execute('SELECT standardShippingFee, freeShippingThreshold FROM settings LIMIT 1');
     const settings = (settingsRows as any[])[0] || { standardShippingFee: 200, freeShippingThreshold: 3000 };
-    const discount = Math.max(0, Number(discountAmount));
-    
-      // SERVER-SIDE ROUTINE VALIDATION
-      let routineSubtotal = 0;
-      const routineProductIds = new Set();
-      for (const item of items) {
-        if (item.isRoutine) {
-          routineProductIds.add(item.productId);
-          // find the canonical price since frontend price might be spoofed
-          const canonical = canonicalItems.find(c => c.productId === item.productId);
-          if (canonical) {
-             routineSubtotal += (Number(canonical.price) * Number(canonical.quantity));
-          }
-        }
+    const routine = calculateRoutineDiscount(canonicalItems.filter(item => item.isRoutine).map(item => ({
+      productId: item.productId, quantity: item.quantity, unitPrice: item.price,
+    })), await getRoutineSettings(conn));
+    let couponDiscount = 0;
+    if (appliedCoupon) {
+      const [couponRows] = await conn.execute('SELECT discountType, discountValue, minPurchase, usageLimit, usageCount, expiryDate FROM coupons WHERE code = ? AND isActive = 1', [String(appliedCoupon.code || '').trim().toUpperCase()]);
+      const coupon = (couponRows as any[])[0];
+      if (!coupon || computedSubtotal < Number(coupon.minPurchase || 0) || (coupon.usageLimit != null && coupon.usageCount >= coupon.usageLimit) || (coupon.expiryDate && new Date(coupon.expiryDate).getTime() < Date.now())) {
+        throw new Error('Your coupon is no longer valid. Please remove it and try again.');
       }
-      
-      let maxValidRoutineDiscount = 0;
-      if (routineProductIds.size >= 2) {
-        maxValidRoutineDiscount = Math.round(routineSubtotal * 0.15);
-      }
-      
-      let maxValidCouponDiscount = 0;
-      if (appliedCoupon) {
-        let val = appliedCoupon.discountValue || appliedCoupon.amount || 0;
-        if (appliedCoupon.discountType === 'percentage') {
-           maxValidCouponDiscount = Math.round(computedSubtotal * val / 100);
-        } else {
-           maxValidCouponDiscount = val;
-        }
-      }
-      
-      if (discount > (maxValidRoutineDiscount + maxValidCouponDiscount + 10)) {
-         await conn.rollback();
-         return res.status(400).json({ error: 'Invalid discount amount. Ensure you have at least 2 distinct items for the routine discount.' });
-      }
+      couponDiscount = coupon.discountType === 'percentage' ? computedSubtotal * Number(coupon.discountValue) / 100 : Number(coupon.discountValue);
+    }
+    const discount = roundMoney(Math.min(computedSubtotal, routine.savings + couponDiscount));
+    if (!Number.isFinite(Number(discountAmount)) || Math.abs(Number(discountAmount) - discount) > 0.02) {
+      throw new Error('Routine savings or prices have changed. Refresh your cart and try again.');
+    }
 
-      const afterDiscount = Math.max(0, computedSubtotal - discount);
+    const afterDiscount = Math.max(0, computedSubtotal - discount);
     const shippingFee = resolvedClientShipping !== undefined ? Number(resolvedClientShipping) : (afterDiscount >= Number(settings.freeShippingThreshold) ? 0 : Number(settings.standardShippingFee));
     const total = afterDiscount + shippingFee;
 

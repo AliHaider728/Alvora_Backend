@@ -9,6 +9,8 @@ import {
   validateAppearanceInput
 } from '../config/storeAppearance.js';
 import crypto from 'crypto';
+import { getRoutineSettings, saveRoutineSettings } from '../mysql-lib/routineSettings.js';
+import { validateRoutineSettings } from '../lib/routineDiscount.js';
 
 const SETTINGS_COLS = 'id, storeName, email, phone, address, currency, freeShippingThreshold, standardShippingFee, taxRate, defaultMetaTitle, defaultMetaDescription, storefrontNavigation, homepageSections, socialLinks, createdAt, updatedAt';
 
@@ -99,6 +101,7 @@ const toPublicSettings = async (settings: any) => {
 
   return {
     storeName: settings.storeName,
+    routineDiscount: await getRoutineSettings(),
     email: settings.email,
     phone: settings.phone,
     address: settings.address,
@@ -128,6 +131,23 @@ router.get('/', async (_req: Request, res: Response) => {
     console.error(err);
     res.status(500).json({ error: 'Could not load store settings' });
   }
+});
+
+router.get('/routine', async (_req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json(await getRoutineSettings());
+  } catch {
+    res.status(503).json({ error: 'Could not load routine discounts. Please try again.' });
+  }
+});
+
+router.put('/routine', authenticateToken, requireAdmin, async (req, res) => {
+  let settings;
+  try { settings = validateRoutineSettings(req.body); }
+  catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid routine discounts' }); }
+  try { res.json(await saveRoutineSettings(settings)); }
+  catch { res.status(500).json({ error: 'Could not save routine discounts. Please try again.' }); }
 });
 
 // PUT base store settings (Admin and Super Admin)
