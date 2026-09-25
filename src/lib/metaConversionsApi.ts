@@ -137,6 +137,7 @@ export const sendMetaPurchase = async ({
     event_id: eventId,
 
     action_source: "website",
+    event_source_url: req.headers.referer || "https://alvora.pk/checkout",
 
     user_data: userData,
 
