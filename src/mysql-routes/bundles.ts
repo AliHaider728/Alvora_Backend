@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { pool } from '../mysql-lib/db';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { randomUUID } from 'crypto';
+import { validateBundleGallery, ensureBundleGallerySchema, getBundleGalleries, replaceBundleGallery, deleteBundleGallery } from '../mysql-lib/bundleGallery.js';
 
 const router = Router();
 
@@ -38,6 +39,7 @@ router.get('/', async (req, res) => {
     }
 
     const bundleIds = bundlesArray.map(b => b.id);
+    const galleries = await getBundleGalleries(bundleIds);
     const placeholders = bundleIds.map(() => '?').join(',');
 
     // Fetch linked products
@@ -101,6 +103,7 @@ router.get('/', async (req, res) => {
 
       return {
         ...bundle,
+        galleryImages: galleries.get(bundle.id) || [],
         isActive: bundle.isActive === 1 || bundle.isActive === true,
         isBestseller: bundle.isBestseller === 1 || bundle.isBestseller === true,
         originalTotalPrice,
@@ -128,6 +131,7 @@ router.get('/:slug', async (req, res) => {
     }
 
     const bundle = bundleRows[0];
+    const galleries = await getBundleGalleries([bundle.id]);
 
     const [linkedRows] = await pool.execute(`
       SELECT bp.bundle_id, bp.quantity as bundle_quantity, ${PRODUCT_COLS_P}
@@ -185,6 +189,7 @@ router.get('/:slug', async (req, res) => {
 
     res.json({
       ...bundle,
+      galleryImages: galleries.get(bundle.id) || [],
       isActive: bundle.isActive === 1 || bundle.isActive === true,
       isBestseller: bundle.isBestseller === 1 || bundle.isBestseller === true,
       originalTotalPrice,
@@ -202,6 +207,11 @@ router.get('/:slug', async (req, res) => {
 // ==========================================
 
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
+  let galleryImages: string[];
+  try { galleryImages = validateBundleGallery(req.body.galleryImages === undefined ? [] : req.body.galleryImages); }
+  catch (error) { return res.status(400).json({ error: (error as Error).message }); }
+  try { await ensureBundleGallerySchema(); }
+  catch { return res.status(503).json({ error: 'Bundle gallery storage is unavailable. Please try again.' }); }
   const conn = await pool.getConnection();
   try {
     const { name, slug, description, shortDescription, image, customImage, discountPercent, isActive, status, isBestseller, displayOrder, products, bundlePrice, discountType, discountValue, customPrice } = req.body;
@@ -214,7 +224,6 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     // Check for duplicate slug
     const [existing] = await conn.execute('SELECT id FROM bundles WHERE slug = ?', [slug]);
     if ((existing as any[]).length > 0) {
-      conn.release();
       return res.status(400).json({ error: 'Slug already exists' });
     }
 
@@ -268,6 +277,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
       }
     }
 
+    await replaceBundleGallery(conn, bundleId, galleryImages);
     await conn.commit();
     res.status(201).json({ success: true, bundleId });
   } catch (error: any) {
@@ -280,6 +290,13 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  let galleryImages: string[] | undefined;
+  try { if (req.body.galleryImages !== undefined) galleryImages = validateBundleGallery(req.body.galleryImages); }
+  catch (error) { return res.status(400).json({ error: (error as Error).message }); }
+  if (galleryImages !== undefined) {
+    try { await ensureBundleGallerySchema(); }
+    catch { return res.status(503).json({ error: 'Bundle gallery storage is unavailable. Please try again.' }); }
+  }
   const conn = await pool.getConnection();
   try {
     const { id } = req.params;
@@ -287,14 +304,12 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     
     const [existing] = await conn.execute('SELECT id FROM bundles WHERE id = ?', [id]);
     if ((existing as any[]).length === 0) {
-      conn.release();
       return res.status(404).json({ error: 'Bundle not found' });
     }
 
     if (slug) {
       const [dup] = await conn.execute('SELECT id FROM bundles WHERE slug = ? AND id != ?', [slug, id]);
       if ((dup as any[]).length > 0) {
-        conn.release();
         return res.status(400).json({ error: 'Slug already exists' });
       }
     }
@@ -313,6 +328,13 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     await conn.beginTransaction();
+
+    // Serialize saves for this bundle, including gallery-only edits.
+    const [locked] = await conn.execute('SELECT id FROM bundles WHERE id = ? FOR UPDATE', [id]);
+    if (!(locked as any[]).length) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Bundle not found' });
+    }
 
     const updates = [];
     const values = [];
@@ -349,6 +371,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
       }
     }
 
+    if (galleryImages !== undefined) await replaceBundleGallery(conn, id, galleryImages);
     await conn.commit();
     res.json({ success: true });
   } catch (error: any) {
@@ -361,17 +384,23 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const conn = await pool.getConnection();
   try {
     const { id } = req.params;
-    const [result] = await pool.execute('DELETE FROM bundles WHERE id = ?', [id]);
+    await conn.beginTransaction();
+    const [result] = await conn.execute('DELETE FROM bundles WHERE id = ?', [id]);
     if ((result as any).affectedRows === 0) {
+      await conn.rollback();
       return res.status(404).json({ error: 'Bundle not found' });
     }
+    await deleteBundleGallery(conn, id);
+    await conn.commit();
     res.json({ success: true });
   } catch (error: any) {
+    await conn.rollback();
     console.error('Error deleting bundle:', error);
     res.status(500).json({ error: 'Failed to delete bundle' });
-  }
+  } finally { conn.release(); }
 });
 
 export default router;
