@@ -31,6 +31,7 @@ export function createGalleryFixture() {
       const images = gallery.get(params[1]) || [];
       images[params[3]] = params[2]; gallery.set(params[1], images); return [{}];
     }
+    if (sql.startsWith('SELECT id, displayOrder FROM bundles')) return [[...bundles.values()]];
     if (sql.startsWith('SELECT * FROM bundles WHERE slug')) return [[...bundles.values()].filter(b => b.slug === params[0] && b.isActive)];
     if (sql.startsWith('SELECT * FROM bundles')) return [[...bundles.values()]];
     if (sql.startsWith('SELECT id FROM bundles WHERE slug')) return [[...bundles.values()].filter(b => b.slug === params[0] && (!sql.includes('id !=') || b.id !== params[1])).map(b => ({ id: b.id }))];

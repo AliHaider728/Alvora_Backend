@@ -242,7 +242,9 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     await conn.beginTransaction();
-    
+    // Lock existing rows so concurrent creates append without sharing a position.
+    const [orderedBundles]: any = await conn.execute('SELECT id, displayOrder FROM bundles ORDER BY displayOrder ASC, id ASC FOR UPDATE');
+    const nextDisplayOrder = orderedBundles.reduce((max: number, b: any) => Math.max(max, Number(b.displayOrder) || 0), -1) + 1;
     const bundleId = randomUUID();
 
     await conn.execute(
@@ -260,7 +262,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
         isActive !== false ? 1 : 0, 
         status || 'published',
         isBestseller ? 1 : 0,
-        displayOrder || 0,
+        nextDisplayOrder,
         bundlePrice || null,
         discountType || 'percentage',
         discountValue || 0,

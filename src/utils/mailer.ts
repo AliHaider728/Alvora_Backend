@@ -117,6 +117,9 @@ export const verifyEmailTransport = async () => {
   }
 };
 
+const routineContentsText = (item: any) => (Array.isArray(item.routineComponents) ? item.routineComponents : []).map((c: any) => c.quantity + ' x ' + c.name + (c.selectedVariant ? ' (' + c.selectedVariant + ')' : '')).join('; ');
+const routineContentsHtml = (item: any) => routineContentsText(item) ? '<div style="color:#64748b;font-size:12px;margin-top:4px;">Includes: ' + escapeHtml(routineContentsText(item)) + '</div>' : '';
+
 export const buildOrderDeliveredEmail = (order: any): EmailContent => {
   const customerName = escapeHtml(order.customerName || order.shippingAddress?.fullName || 'Customer');
   const orderId = escapeHtml(order.orderId || 'Order');
@@ -130,7 +133,7 @@ export const buildOrderDeliveredEmail = (order: any): EmailContent => {
     return `
       <tr>
         <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;">
-          <strong style="color:#0f172a;">${itemName}</strong>${variant}
+          <strong style="color:#0f172a;">${itemName}</strong>${variant}${routineContentsHtml(item)}
         </td>
         <td style="padding:12px 8px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569;">${Math.max(1, Number(item.quantity) || 1)}</td>
         <td style="padding:12px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">${formatPkr((Number(item.price) || 0) * Math.max(1, Number(item.quantity) || 1))}</td>
@@ -196,7 +199,7 @@ export const buildOrderConfirmationEmail = (order: any, options?: { isNewAccount
   const itemLines = items.map((item: any) => {
     const quantity = Math.max(1, Number(item.quantity) || 1);
     const variant = item.selectedVariant ? ` (${String(item.selectedVariant)})` : '';
-    return `${String(item.name || 'Alvora product')}${variant} x ${quantity} at ${formatPkr(item.price)}`;
+    return `${String(item.name || 'Alvora product')}${variant} x ${quantity} at ${formatPkr(item.price)}${routineContentsText(item) ? " — Includes: " + routineContentsText(item) : ""}`;
   }).join('\n');
   const itemsHtml = items.map((item: any) => {
     const quantity = Math.max(1, Number(item.quantity) || 1);
@@ -205,7 +208,7 @@ export const buildOrderConfirmationEmail = (order: any, options?: { isNewAccount
       ? `<div style="color:#64748b;font-size:12px;margin-top:4px;">${escapeHtml(item.selectedVariant)}</div>`
       : '';
     return `<tr>
-      <td style="padding:13px 0;border-bottom:1px solid #e2e8f0;"><strong style="color:#0f172a;">${escapeHtml(item.name || 'Alvora product')}</strong>${variant}</td>
+      <td style="padding:13px 0;border-bottom:1px solid #e2e8f0;"><strong style="color:#0f172a;">${escapeHtml(item.name || 'Alvora product')}</strong>${variant}${routineContentsHtml(item)}</td>
       <td style="padding:13px 8px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569;">${quantity}</td>
       <td style="padding:13px 8px;border-bottom:1px solid #e2e8f0;text-align:right;color:#475569;">${formatPkr(itemPrice)}</td>
       <td style="padding:13px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">${formatPkr(itemPrice * quantity)}</td>
@@ -326,7 +329,7 @@ export const buildAdminNewOrderEmail = (order: any): EmailContent => {
       : '';
     const skuHtml = item.sku ? `<div style="color:#64748b;font-size:12px;margin-top:2px;">SKU: ${escapeHtml(item.sku)}</div>` : '';
     return `<tr>
-      <td style="padding:13px 0;border-bottom:1px solid #e2e8f0;"><strong style="color:#0f172a;">${escapeHtml(item.name || 'Product')}</strong>${variant}${skuHtml}</td>
+      <td style="padding:13px 0;border-bottom:1px solid #e2e8f0;"><strong style="color:#0f172a;">${escapeHtml(item.name || 'Product')}</strong>${variant}${skuHtml}${routineContentsHtml(item)}</td>
       <td style="padding:13px 8px;border-bottom:1px solid #e2e8f0;text-align:center;color:#475569;">${quantity}</td>
       <td style="padding:13px 8px;border-bottom:1px solid #e2e8f0;text-align:right;color:#475569;">${formatPkr(itemPrice)}</td>
       <td style="padding:13px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">${formatPkr(itemPrice * quantity)}</td>

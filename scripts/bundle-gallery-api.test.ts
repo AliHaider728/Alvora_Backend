@@ -46,6 +46,7 @@ test('real bundle routes persist ordered galleries independently and atomically'
     await t.test('create, clear and delete do not affect another bundle', async () => {
       const created = await call('', 'POST', { name: 'New Bundle', slug: 'new-bundle', galleryImages: ['/new.jpg'] });
       assert.equal(created.status, 201);
+      assert.ok(fixture.bundles.get(created.data.bundleId).displayOrder > Math.max(...[...fixture.bundles.values()].filter(b => b.id !== created.data.bundleId).map(b => Number(b.displayOrder) || 0)));
       assert.deepEqual((await call('/new-bundle')).data.galleryImages, ['/new.jpg']);
       await call('/glow', 'PUT', { galleryImages: [] });
       assert.deepEqual((await call('/the-glow-bundle')).data.galleryImages, []);

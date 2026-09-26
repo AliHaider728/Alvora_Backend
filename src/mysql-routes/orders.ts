@@ -16,6 +16,8 @@ import { calculateRoutineDiscount, roundMoney } from '../lib/routineDiscount.js'
 import { getRoutineSettings } from '../mysql-lib/routineSettings.js';
 import { resolveCartLine } from '../lib/pricingOffers.js';
 
+import { resolveRoutineOrder, readRoutineComponents, restoreRoutineStock } from '../mysql-lib/routineOrders.js';
+
 const router = Router();
 
 const logEmailFailure = (kind: string, orderId: string, error: unknown) => {
@@ -24,7 +26,7 @@ const logEmailFailure = (kind: string, orderId: string, error: unknown) => {
 
 // ─── Explicit column lists (no SELECT *) ────────────────────────────────────
 const ORDER_COLS = 'id, orderId, user_id, guestEmail, guestPhone, total, subtotal, shippingFee, status, paymentMethod, shippingAddress, paymentDetails, createdAt, updatedAt, discountAmount, appliedCoupon, checkoutRequestId, trackingNumber, confirmationEmailSentAt, confirmationEmailAccepted';
-const ORDER_ITEM_COLS = 'id, order_id, productId, productName, quantity, price, image, selectedVariant, variationId';
+const ORDER_ITEM_COLS = 'id, order_id, productId, productName, quantity, price, image, selectedVariant, variationId, routineComponents';
 const ORDER_HISTORY_COLS = 'id, order_id, status, note, timestamp';
 
 // Helper: Assemble a full order object (order + items + status history)
@@ -62,6 +64,9 @@ export function mapOrderForFrontend(o: any) {
 
   const mappedItems = (o.items || []).map((item: any) => ({
     ...item,
+    routineComponents: readRoutineComponents(item.routineComponents),
+    isRoutine: readRoutineComponents(item.routineComponents).length > 0,
+    ...(readRoutineComponents(item.routineComponents).length ? { productType: 'bundle' } : {}),
     name: item.productName || item.name,
     price: Number(item.price || 0),
     quantity: Number(item.quantity || 1)
@@ -233,6 +238,12 @@ router.post('/', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Invalid item in order' });
       }
 
+      if (item.routineComponents !== undefined) {
+        const routineItem = await resolveRoutineOrder(conn, item);
+        canonicalItems.push(routineItem);
+        computedSubtotal += routineItem.price * routineItem.quantity;
+        continue;
+      }
       const isBundle = item.productType === 'bundle';
       if (isBundle && item.isRoutine === true) {
         throw new Error('Choose individual products for a custom routine.');
@@ -323,7 +334,7 @@ router.post('/', async (req: Request, res: Response) => {
     // Fetch shipping settings
     const [settingsRows] = await conn.execute('SELECT standardShippingFee, freeShippingThreshold FROM settings LIMIT 1');
     const settings = (settingsRows as any[])[0] || { standardShippingFee: 200, freeShippingThreshold: 3000 };
-    const routine = calculateRoutineDiscount(canonicalItems.filter(item => item.isRoutine).map(item => ({
+    const routine = calculateRoutineDiscount(canonicalItems.filter(item => item.isRoutine && !item.routineComponents).map(item => ({
       productId: item.productId, quantity: item.quantity, unitPrice: item.price,
     })), await getRoutineSettings(conn));
     let couponDiscount = 0;
@@ -367,8 +378,8 @@ router.post('/', async (req: Request, res: Response) => {
     for (const item of canonicalItems) {
       const itemId = crypto.randomBytes(12).toString('hex');
       await conn.execute(
-        `INSERT INTO order_items (id, order_id, productId, productName, quantity, price, image, selectedVariant, variationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [itemId, internalId, item.productId, item.productName, item.quantity, item.price, item.image, item.selectedVariant, item.variationId]
+        `INSERT INTO order_items (id, order_id, productId, productName, quantity, price, image, selectedVariant, variationId, routineComponents) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [itemId, internalId, item.productId, item.productName, item.quantity, item.price, item.image, item.selectedVariant, item.variationId, item.routineComponents ? JSON.stringify(item.routineComponents) : null]
       );
 
       // Atomic stock deduction
@@ -492,8 +503,9 @@ router.put('/:orderId/status', authenticateToken, requireAdmin, async (req: Requ
 
     // If cancelling — restore stock
     if (status === 'Cancelled' && previousStatus !== 'Cancelled') {
-      const [items] = await conn.execute('SELECT productId, quantity FROM order_items WHERE order_id = ?', [order.id]);
+      const [items] = await conn.execute('SELECT productId, quantity, routineComponents FROM order_items WHERE order_id = ?', [order.id]);
       for (const item of items as any[]) {
+        if (await restoreRoutineStock(conn, item)) continue;
         await conn.execute(
           `UPDATE products SET stockQuantity = stockQuantity + ?, updatedAt = ? WHERE id = ? AND trackInventory = 1`,
           [item.quantity, now, item.productId]
