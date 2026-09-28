@@ -21,9 +21,7 @@ cpSync(join(rootDir, 'package.json'), join(deployDir, 'package.json'));
 cpSync(join(rootDir, 'package-lock.json'), join(deployDir, 'package-lock.json'));
 cpSync(join(rootDir, 'app.js'), join(deployDir, 'app.js'));
 
-if (existsSync(join(rootDir, '.env.production'))) {
-  cpSync(join(rootDir, '.env.production'), join(deployDir, '.env'));
-} else if (existsSync(join(rootDir, '.env'))) {
+if (existsSync(join(rootDir, '.env'))) {
   cpSync(join(rootDir, '.env'), join(deployDir, '.env'));
 }
 
