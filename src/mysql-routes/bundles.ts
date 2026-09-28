@@ -1,3 +1,4 @@
+import { triggerSitemapRevalidation } from '../utils/revalidateSitemap';
 import { Router } from 'express';
 import * as fs from 'fs';
 import { pool } from '../mysql-lib/db';
@@ -281,6 +282,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 
     await replaceBundleGallery(conn, bundleId, galleryImages);
     await conn.commit();
+    triggerSitemapRevalidation();
     res.status(201).json({ success: true, bundleId });
   } catch (error: any) {
     await conn.rollback();
@@ -375,6 +377,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     if (galleryImages !== undefined) await replaceBundleGallery(conn, id, galleryImages);
     await conn.commit();
+    triggerSitemapRevalidation();
     res.json({ success: true });
   } catch (error: any) {
     await conn.rollback();
@@ -397,6 +400,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
     }
     await deleteBundleGallery(conn, id);
     await conn.commit();
+    triggerSitemapRevalidation();
     res.json({ success: true });
   } catch (error: any) {
     await conn.rollback();

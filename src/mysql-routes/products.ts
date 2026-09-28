@@ -1,3 +1,4 @@
+import { triggerSitemapRevalidation } from '../utils/revalidateSitemap';
 import { Router, Request, Response } from 'express';
 import { pool } from '../mysql-lib/db.js';
 import { AuthRequest, authenticateIfPresent, authenticateToken, requireAdmin } from '../middleware/auth.js';
@@ -214,6 +215,7 @@ router.put('/reorder', authenticateToken, requireAdmin, async (req: AuthRequest,
         await conn.execute('UPDATE products SET displayOrder = ? WHERE id = ?', [u.displayOrder, u.id]);
       }
       await conn.commit();
+    triggerSitemapRevalidation();
     } catch (e) {
       await conn.rollback();
       throw e;
@@ -355,6 +357,7 @@ router.post('/', authenticateToken, requireAdmin, async (req: AuthRequest, res: 
     }
 
     await conn.commit();
+    triggerSitemapRevalidation();
 
     const newProduct = await getFullProduct(pool, id, true);
     res.status(201).json(newProduct);
@@ -496,6 +499,7 @@ router.put('/:id', authenticateToken, requireAdmin, async (req: AuthRequest, res
     }
 
     await conn.commit();
+    triggerSitemapRevalidation();
     res.json(await getFullProduct(pool, req.params.id, true));
   } catch (err: any) {
     await conn.rollback();
@@ -520,6 +524,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req: Request, res:
     // Cascade deletes (product_images, product_categories, product_variants all have FK → products)
     await conn.execute('DELETE FROM products WHERE id = ?', [req.params.id]);
     await conn.commit();
+    triggerSitemapRevalidation();
     res.json({ message: 'Product deleted successfully' });
   } catch (err: any) {
     await conn.rollback();

@@ -1,3 +1,4 @@
+import { triggerSitemapRevalidation } from '../utils/revalidateSitemap';
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import { pool } from '../mysql-lib/db.js';
@@ -64,6 +65,7 @@ router.post('/', authenticateToken, requireSuperAdmin, async (req: Request, res:
     );
 
     const [newCat] = await pool.execute(`SELECT ${CATEGORY_COLS} FROM categories WHERE id = ?`, [id]);
+    triggerSitemapRevalidation();
     res.status(201).json((newCat as any[])[0]);
   } catch (error: any) {
     res.status(400).json({ error: 'Could not create category' });
@@ -96,6 +98,7 @@ router.put('/:id', authenticateToken, requireSuperAdmin, async (req: Request, re
     );
 
     const [updated] = await pool.execute(`SELECT ${CATEGORY_COLS} FROM categories WHERE id = ?`, [req.params.id]);
+    triggerSitemapRevalidation();
     res.json((updated as any[])[0]);
   } catch (error: any) {
     res.status(400).json({ error: 'Could not update category' });
@@ -160,6 +163,7 @@ router.delete('/:id', authenticateToken, requireSuperAdmin, async (req: Request,
     await conn.execute('DELETE FROM categories WHERE id = ?', [req.params.id]);
     
     await conn.commit();
+    triggerSitemapRevalidation();
     res.json({ message: 'Category deleted successfully' });
   } catch (error: any) {
     await conn.rollback();
