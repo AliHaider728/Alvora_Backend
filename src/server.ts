@@ -26,8 +26,9 @@ const app = express();
 
 const configuredFrontendUrl = process.env.FRONTEND_URL?.trim();
 const allowedOrigins = [
-  'https://alvora.com',
-  'https://www.alvora.com',
+  'https://alvora.pk',
+  'https://www.alvora.pk',
+  'https://admin.alvora.pk',
   'https://alvora-lyart.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
