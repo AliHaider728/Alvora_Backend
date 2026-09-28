@@ -7,7 +7,7 @@ import bundlesRouter from '../src/mysql-routes/bundles.js';
 import { authenticateToken, requireAdmin } from '../src/middleware/auth.js';
 
 // Isolated SQL fixture: exercises the real bundle routes without changing live data.
-export function createGalleryFixture() {
+export function createGalleryFixture(options: { schemaReady?: boolean } = {}) {
   process.env.JWT_SECRET = 'bundle-gallery-local-test-only';
   const bundles = new Map<string, any>([
     ['glow', { id: 'glow', name: 'The Glow Bundle', slug: 'the-glow-bundle', image: '/images/bundle-glow.jpg', isActive: true, discountType: 'percentage', discountValue: 10, discountPercent: 10 }],
@@ -16,7 +16,7 @@ export function createGalleryFixture() {
   const product = { id: 'wash', name: 'Alvora Glow Beads Face Wash', price: 1400, inStock: true, trackInventory: false, status: 'published', isVisible: true, images: ['/images/animation/prod-1.png'], bundle_quantity: 1 };
   const cream = { ...product, id: 'cream', name: 'Alvora Radiance Brightening Cream', price: 1900, images: ['/images/animation/prod-2.png'] };
   const gallery = new Map<string, string[]>();
-  let schemaReady = false;
+  let schemaReady = options.schemaReady ?? false;
   let snapshot: any;
   let failInsert = false;
   const execute = async (sql: string, params: any[] = []): Promise<any> => {

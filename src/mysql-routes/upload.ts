@@ -12,7 +12,8 @@ import {
   uploadReviewImage
 } from '../lib/cloudinary.js';
 import { uploadToR2, deleteFromR2 } from '../lib/r2.js';
-import { createProductThumbnail } from '../lib/productImages.js';
+import { createProductImage, createProductThumbnail } from '../lib/productImages.js';
+import { createHash } from 'crypto';
 import { pool } from '../mysql-lib/db.js';
 const router = Router();
 
@@ -56,16 +57,13 @@ router.post(
     }
 
     try {
-      const timestamp = Date.now();
-      const filenameBase = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const originalFilename = `products/${timestamp}-${filenameBase}`;
-      const thumbnailFilename = `products/thumb-${timestamp}-${filenameBase}`;
-
-      // Create thumbnail
-      const thumbnailBuffer = await createProductThumbnail(req.file.buffer);
+      const [imageBuffer, thumbnailBuffer] = await Promise.all([createProductImage(req.file.buffer), createProductThumbnail(req.file.buffer)]);
+      const key = createHash('sha256').update(imageBuffer).update(thumbnailBuffer).digest('hex');
+      const originalFilename = `products/optimized/${key}.webp`;
+      const thumbnailFilename = `products/optimized/thumb-${key}.webp`;
 
       // Upload both to R2
-      const url = await uploadToR2(req.file.buffer, originalFilename, req.file.mimetype);
+      const url = await uploadToR2(imageBuffer, originalFilename, 'image/webp');
       const thumbnailUrl = await uploadToR2(thumbnailBuffer, thumbnailFilename, 'image/webp');
 
       res.json({
@@ -76,8 +74,8 @@ router.post(
         thumbnailSecureUrl: thumbnailUrl,
         thumbnailPublicId: thumbnailFilename,
         filename: originalFilename,
-        mimetype: req.file.mimetype,
-        size: req.file.size
+        mimetype: 'image/webp',
+        size: imageBuffer.length
       });
     } catch (err: any) {
       console.error('R2 image upload failed:', err);
@@ -186,21 +184,29 @@ router.delete(
   async (req: Request, res: Response) => {
     const publicId = typeof req.body?.publicId === 'string' ? req.body.publicId.trim() : '';
     if (!publicId) return res.status(400).json({ error: 'Image public ID is required' });
+    if (!/^products\/[a-zA-Z0-9_./-]+$/.test(publicId) || publicId.includes('..')) {
+      return res.status(400).json({ error: 'Invalid image public ID' });
+    }
 
     try {
-      const [pRows] = await pool.execute('SELECT product_id FROM product_images WHERE public_id = ? OR thumbnail_public_id = ?', [publicId, publicId]);
-      const referencedProduct = (pRows as any[]).length > 0;
-      if (referencedProduct) {
+      const originalId = publicId.replace(/\/thumb-([^/]+)$/, '/$1');
+      const thumbId = originalId.replace(/\/([^/]+)$/, '/thumb-$1');
+      const base = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
+      const urls = [`${base}/${originalId}`, `${base}/${thumbId}`];
+      const [pRows] = await pool.execute('SELECT id FROM product_images WHERE publicId IN (?, ?) OR url IN (?, ?) LIMIT 1', [originalId, thumbId, ...urls]);
+      const [bRows] = await pool.execute('SELECT id FROM bundles WHERE image IN (?, ?) OR customImage IN (?, ?) LIMIT 1', [...urls, ...urls]);
+      const [gRows] = await pool.execute('SELECT id FROM bundle_images WHERE url IN (?, ?) LIMIT 1', urls);
+      const [vRows] = await pool.execute("SELECT id FROM product_variants WHERE JSON_UNQUOTE(JSON_EXTRACT(image, '$.url')) IN (?, ?) LIMIT 1", urls);
+      if ([pRows, bRows, gRows, vRows].some(rows => (rows as any[]).length > 0)) {
         return res.status(409).json({
-          error: 'This image is attached to a saved product and must be removed through the product editor.'
+          error: 'This image is attached to a saved product or bundle and must be removed through its editor.'
         });
       }
       
-      await deleteFromR2(publicId);
+      await deleteFromR2(originalId);
       
       // Also attempt to delete the thumbnail if it exists
-      const thumbId = publicId.replace('products/', 'products/thumb-');
-      if (thumbId !== publicId) {
+      if (thumbId !== originalId) {
         try {
           await deleteFromR2(thumbId);
         } catch (e) {
