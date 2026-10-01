@@ -2,7 +2,7 @@ import { triggerSitemapRevalidation } from '../utils/revalidateSitemap';
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import { pool } from '../mysql-lib/db.js';
-import { authenticateToken, requireSuperAdmin } from '../middleware/auth.js';
+import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import crypto from 'crypto';
 
 const CATEGORY_COLS = 'id, name, slug, description, parentId, image, status, displayOrder, isFeatured, level, createdAt, updatedAt';
@@ -28,7 +28,7 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
-router.get('/admin/all', authenticateToken, requireSuperAdmin, async (_req: Request, res: Response) => {
+router.get('/admin/all', authenticateToken, requireAdmin, async (_req: Request, res: Response) => {
   try {
     const [rows] = await pool.execute(`SELECT ${CATEGORY_COLS} FROM categories ORDER BY displayOrder ASC, name ASC`);
     res.json(buildTree(rows as any[]));
@@ -37,7 +37,7 @@ router.get('/admin/all', authenticateToken, requireSuperAdmin, async (_req: Requ
   }
 });
 
-router.post('/', authenticateToken, requireSuperAdmin, async (req: Request, res: Response) => {
+router.post('/', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { name, slug, description, parentId, image, status, displayOrder, isFeatured } = req.body;
     
@@ -72,7 +72,26 @@ router.post('/', authenticateToken, requireSuperAdmin, async (req: Request, res:
   }
 });
 
-router.put('/:id', authenticateToken, requireSuperAdmin, async (req: Request, res: Response) => {
+router.get('/:id/delete-impact', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const [productsCountResult] = await pool.execute('SELECT COUNT(*) as count FROM product_categories WHERE category_id = ?', [req.params.id]);
+    const productsAffected = (productsCountResult as any[])[0].count;
+
+    const [settingsRows] = await pool.execute('SELECT storefrontNavigation FROM settings LIMIT 1');
+    const setting = (settingsRows as any[])[0];
+    let inNavigation = false;
+    if (setting && setting.storefrontNavigation) {
+      const nav = typeof setting.storefrontNavigation === 'string' ? JSON.parse(setting.storefrontNavigation) : setting.storefrontNavigation;
+      inNavigation = nav.some((n: any) => n.categoryId === req.params.id);
+    }
+    
+    res.json({ productsAffected, inNavigation });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not get category impact' });
+  }
+});
+
+router.put('/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { name, slug, description, parentId, status, displayOrder, isFeatured } = req.body;
     
@@ -106,7 +125,7 @@ router.put('/:id', authenticateToken, requireSuperAdmin, async (req: Request, re
 });
 
 // DELETE WITH ATOMIC TRANSACTION
-router.delete('/:id', authenticateToken, requireSuperAdmin, async (req: Request, res: Response) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   const { resolution, navigationResolution, targetCategoryId } = req.body;
   
   const conn = await pool.getConnection();
