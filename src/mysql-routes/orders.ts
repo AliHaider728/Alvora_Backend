@@ -437,22 +437,14 @@ router.post('/', async (req: Request, res: Response) => {
     // Fire-and-forget CAPI events + emails (same pattern as MongoDB version)
     const metaEventId = `purchase_${orderId}`;
 
-    try { 
-      await sendOrderConfirmationEmail(newOrder, {}); 
-      await pool.execute('UPDATE orders SET confirmationEmailSentAt = NOW(), confirmationEmailAccepted = 1 WHERE orderId = ?', [orderId]);
-      if (newOrder) {
-        newOrder.confirmationEmailSentAt = new Date().toISOString();
-        newOrder.confirmationEmailAccepted = 1;
-      }
-    } catch (e) { 
-      logEmailFailure('Order confirmation', orderId, e); 
-      await pool.execute('UPDATE orders SET confirmationEmailAccepted = 0 WHERE orderId = ?', [orderId]);
-      if (newOrder) {
-        newOrder.confirmationEmailAccepted = 0;
-      }
-    }
-
     void (async () => {
+      try {
+        await sendOrderConfirmationEmail(newOrder, {});
+        await pool.execute('UPDATE orders SET confirmationEmailSentAt = NOW(), confirmationEmailAccepted = 1 WHERE orderId = ?', [orderId]);
+      } catch (e) {
+        logEmailFailure('Order confirmation', orderId, e);
+        await pool.execute('UPDATE orders SET confirmationEmailAccepted = 0 WHERE orderId = ?', [orderId]);
+      }
       try {
         const recipients = getAdminNotificationRecipients();
         if (recipients.length > 0) await sendAdminNewOrderEmail(newOrder, recipients);
