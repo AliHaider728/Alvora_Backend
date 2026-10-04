@@ -355,6 +355,21 @@ router.post('/', async (req: Request, res: Response) => {
     const shippingFee = resolvedClientShipping !== undefined ? Number(resolvedClientShipping) : (afterDiscount >= Number(settings.freeShippingThreshold) ? 0 : Number(settings.standardShippingFee));
     const total = afterDiscount + shippingFee;
 
+    // --- FALLBACK IDEMPOTENCY ---
+    // If a user retries after a timeout, they might have generated a new checkoutRequestId if storage is blocked.
+    // Prevent duplicate orders within a 5-minute window for the same phone and total amount.
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const [recentOrders] = await conn.execute(
+      'SELECT orderId FROM orders WHERE guestPhone = ? AND total = ? AND createdAt >= ? ORDER BY createdAt DESC LIMIT 1',
+      [phone, total, fiveMinutesAgo]
+    );
+    if ((recentOrders as any[]).length > 0) {
+      let existingOrder = await getFullOrder(conn, (recentOrders as any[])[0].orderId);
+      if (existingOrder) existingOrder = mapOrderForFrontend(existingOrder);
+      await conn.commit();
+      return res.status(200).json(existingOrder);
+    }
+
     // Create the order
     const orderId = generateOrderId();
     const internalId = crypto.randomBytes(12).toString('hex');
